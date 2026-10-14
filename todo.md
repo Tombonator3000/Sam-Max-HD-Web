@@ -1,6 +1,7 @@
 # todo.md
 
 - [x] Arbeidsflyt som bygger og publiserer siden (14. oktober)
-- [ ] Tom slår på Pages: Settings > Pages > Source = GitHub Actions
-- [ ] Første bygg på main og test i nettleser (PC og mobil)
+- [x] Pages slått på, første bygg på main publisert (14. oktober)
+- [x] Testet i Chromium uten skjerm: kontoret i HD
+- [ ] Tom tester på PC og mobil
 - [ ] Vurder MT-32-emulering (ROM-filene ligger i spilldata) for musikken
