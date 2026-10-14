@@ -1,0 +1,80 @@
+# Nettsiden for Sam & Max HD: ScummVM med HD-patchen for nettleseren (GPL), bygget fra
+# github.com/Tombonator3000/Sam-Max-HD. Siden har bare motoren og brukergrensesnittet; spillet og
+# HD-modden hentes i nettleseren fra grenene spilldata og hd-mod i Sam-Max-HD (offentlig repo).
+#
+# Første gang: Settings > Pages > Source = GitHub Actions i dette repoet.
+name: Nettsiden
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Gren eller commit i Sam-Max-HD som bygges
+        default: main
+  push:
+    branches: [main]
+  pull_request:
+  # Hver natt: ny motor hvis main i Sam-Max-HD er endret (HD-modden hentes uansett av siden selv)
+  schedule:
+    - cron: '41 3 * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: nettsiden-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bygg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Tombonator3000/Sam-Max-HD
+          ref: ${{ inputs.ref || 'main' }}
+          path: src
+
+      - name: Byggepakker
+        run: sudo apt-get update && sudo apt-get install -y pkg-config zip xz-utils
+
+      - name: Emscripten fra forrige gang
+        uses: actions/cache@v4
+        with:
+          path: src/engine/emsdk
+          key: emsdk-${{ hashFiles('src/engine/SCUMMVM_COMMIT') }}
+
+      - name: Bygg ScummVM med HD-patchen for nettleseren
+        run: JOBS=$(nproc) src/engine/build-web.sh
+
+      - name: Lag Pages-pakken
+        run: python3 src/engine/build-pages.py --out "$GITHUB_WORKSPACE/side"
+
+      - name: Ingen spillfiler eller HD-bilder i pakken
+        run: |
+          if find side \( -iname 'SAMNMAX.*' -o -iname 'MONSTER.SOU*' -o -iname '*.ROM' -o -path '*/rooms/*' -o -path '*/costumes/*' -o -path '*/objects/*' \) | grep .; then
+            echo "Pakken skal bare ha motoren"; exit 1
+          fi
+          grep -q '"includes_game_data": false' side/build.json
+          du -sh side; ls side
+
+      - name: Test nettsidekoden
+        run: node --test src/engine/pages/tests/*.test.mjs
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: side
+
+  publiser:
+    needs: bygg
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
